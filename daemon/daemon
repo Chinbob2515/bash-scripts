@@ -1,0 +1,142 @@
+#! /bin/bash
+# A command for creating minimal daemon processes - uses job control and PID
+# Ben Hack
+
+# Example use:
+# daemon up --name bob --exec "python -u test.py"
+# daemon up --name bob --exec "python -u test.py" --log here.txt
+# daemon status --name bob
+# daemon down --name bob
+
+# I can't be bothered to handle errors manually - just assume a failure from an invoked command means a failure for us
+set -e
+
+# set up enviroment
+
+WORKDIR="$HOME/.daemon/"
+LOGDIR="$WORKDIR/logs/"
+if [[ ! -d $WORKDIR ]]; then
+	mkdir $WORKDIR
+fi
+if [[ ! -d $LOGDIR ]]; then
+	mkdir $LOGDIR
+fi
+
+COMMAND=-1
+UP=0
+DOWN=1
+STATUS=2
+NAME=""
+LOG_FILE=""
+CUSTOM_LOG_FILE=0
+EXEC=""
+
+
+# parse command
+
+while test $# -gt 0; do
+  case "$1" in
+    up)
+      COMMAND=$UP
+      ;;
+    down)
+      COMMAND=$DOWN
+      ;;
+    status)
+      COMMAND=$STATUS
+      ;;
+    -N|--name)
+      NAME=$2
+      shift
+      ;;
+    -E|--exec)
+      EXEC=$2
+      shift
+      ;;
+    -L|--log)
+      CUSTOM_LOG_FILE=1
+      LOG_FILE=$2
+      shift
+      ;;
+    -D|--dump)
+      CUSTOM_LOG_FILE=1
+      LOG_FILE="/dev/null"
+      ;;
+    *)
+      break
+      ;;
+  esac
+  shift
+done
+
+# do logic
+
+if [[ $COMMAND == -1 ]]; then
+	echo "You must specify which operation to use!"
+	exit 1
+fi
+if [[ $NAME == "" ]]; then
+	echo "You must specify your daemon process name!"
+	exit 1
+fi
+
+PIDFILE="$WORKDIR/$NAME.pid"
+if [[ $LOG_FILE == "" ]]; then
+	LOG_FILE="$LOGDIR/$NAME.log"
+fi
+
+
+if [[ $COMMAND == $UP ]]; then
+
+	if [[ -f $PIDFILE ]]; then
+		echo "This daemon already exists - try a different name"
+		exit 1
+	fi
+	if [[ $EXEC == "" ]]; then
+		echo "You must specify what command to use!"
+		exit 1
+	fi
+
+	nohup $EXEC > $LOG_FILE 2>/dev/null &
+	echo "$!" > $PIDFILE
+	echo $CUSTOM_LOG_FILE >> $PIDFILE
+	echo $LOG_FILE >> $PIDFILE
+	echo "Daemon up..."
+	exit 0
+
+elif [[ $COMMAND == $DOWN ]]; then
+
+	if [[ ! -f $PIDFILE ]]; then
+		echo "No such daemon - was the name mispelt?"
+		exit 1
+	fi
+
+	CUSTOM_LOG_FILE=$(head -n 2 $PIDFILE | tail -n 1)
+	LOG_FILE=$(tail -n 1 $PIDFILE)
+
+	kill -SIGTERM $(head -n 1 $PIDFILE)
+	rm $PIDFILE
+	echo "Daemon killed"
+
+	if [[ $CUSTOM_LOG_FILE == "0" ]]; then
+		rm $LOG_FILE
+	fi
+
+	exit 0
+
+elif [[ $COMMAND == $STATUS ]]; then
+
+	LOG_FILE=$(tail -n 1 $PIDFILE)
+
+	if [[ ! -f $LOG_FILE ]]; then
+		echo "No log file found here ($LOG_FILE)"
+		exit 1
+	fi
+
+	less $LOG_FILE
+	exit 0
+
+else
+	echo "Invalid subcommand!"
+	exit 1
+fi
