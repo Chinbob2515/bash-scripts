@@ -9,7 +9,7 @@
 # daemon down --name bob
 
 # I can't be bothered to handle errors manually - just assume a failure from an invoked command means a failure for us
-set -e
+#set -e
 
 # set up enviroment
 
@@ -26,6 +26,7 @@ COMMAND=-1
 UP=0
 DOWN=1
 STATUS=2
+READLOG=3
 NAME=""
 LOG_FILE=""
 CUSTOM_LOG_FILE=0
@@ -45,6 +46,9 @@ while test $# -gt 0; do
     status)
       COMMAND=$STATUS
       ;;
+    readlog)
+       COMMAND=$READLOG
+       ;;
     -N|--name)
       NAME=$2
       shift
@@ -72,7 +76,7 @@ done
 # do logic
 
 if [[ $COMMAND == -1 ]]; then
-	echo "You must specify which operation to use!"
+	echo "You must specify a (valid) operation to use!"
 	exit 1
 fi
 if [[ $NAME == "" ]]; then
@@ -85,10 +89,14 @@ if [[ $LOG_FILE == "" ]]; then
 	LOG_FILE="$LOGDIR/$NAME.log"
 fi
 
+if [[ ! $COMMAND == $STATUS ]]; then
+	$0 --name $NAME status >> /dev/null
+	RUNNING=$?
+fi
 
 if [[ $COMMAND == $UP ]]; then
 
-	if [[ -f $PIDFILE ]]; then
+	if [[ $RUNNING == 0 ]] ; then
 		echo "This daemon already exists - try a different name"
 		exit 1
 	fi
@@ -106,7 +114,7 @@ if [[ $COMMAND == $UP ]]; then
 
 elif [[ $COMMAND == $DOWN ]]; then
 
-	if [[ ! -f $PIDFILE ]]; then
+	if [[ $RUNNING == 1 ]]; then
 		echo "No such daemon - was the name mispelt?"
 		exit 1
 	fi
@@ -125,6 +133,28 @@ elif [[ $COMMAND == $DOWN ]]; then
 	exit 0
 
 elif [[ $COMMAND == $STATUS ]]; then
+
+	if [[ ! -f $PIDFILE ]]; then
+		echo "$NAME is currently halted"
+		exit 1
+	else
+		PID=$(head -n 1 $PIDFILE)
+		if  ps -p $PID > /dev/null ; then
+			echo "$NAME is currently running"
+			exit 0
+		else
+			echo "$NAME is currently halted"
+			rm $PIDFILE
+			exit 1
+		fi
+	fi
+
+elif [[ $COMMAND == $READLOG ]]; then
+
+	if [[ $RUNNING == 1 ]]; then
+		echo "No daemon named $NAME"
+		exit 1
+	fi
 
 	LOG_FILE=$(tail -n 1 $PIDFILE)
 
