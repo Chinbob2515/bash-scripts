@@ -1,0 +1,16 @@
+#! /bin/bash
+
+export SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+# make a rather large assumption that the main directory is one up from wherever this file is stored
+# MUST BE CHANGED IF THIS FILE IS MOVED FROM scripts/
+export DIR="$SCRIPT_DIR/.."
+export VIRTUALENV_DIR="venv"
+export BACKUP_DIR="$HOME/insideuni-backups"
+
+export PROJECT_NAME="insideuni"
+
+export POSTGRES_USER="insideuni"
+export POSTGRES_DATABASE="insideunidb"
+export PGPASSFILE="$HOME/.pgpass"
+
+echo "Imported Bash settings"
